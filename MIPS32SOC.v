@@ -115,18 +115,19 @@ module ControlUnit (
   output memRead,
   output memWrite,
   output RegWrite,
-  output Branch,
-  output J
+  output branch,
+  output jump,
+  output branch2
 );
   wire s0;
   wire s1;
   wire s2;
   wire [2:0] s3;
-  wire [10:0] s4;
+  wire [11:0] s4;
   wire s5;
+  wire bne1;
   wire s6;
-  wire s7;
-  wire [10:0] s8;
+  wire [11:0] s7;
   CompUnsigned #(
     .Bits(6)
   )
@@ -153,7 +154,7 @@ module ControlUnit (
     .b( 6'b100011 ),
     .\= ( s2 )
   );
-  // BEQ
+  // Beq
   CompUnsigned #(
     .Bits(6)
   )
@@ -162,143 +163,95 @@ module ControlUnit (
     .b( 6'b100 ),
     .\= ( s5 )
   );
-  // BNE
+  // Bne
   CompUnsigned #(
     .Bits(6)
   )
   CompUnsigned_i4 (
     .a( Opcode ),
     .b( 6'b101 ),
-    .\= ( s6 )
+    .\= ( bne1 )
   );
-  // J
   CompUnsigned #(
     .Bits(6)
   )
   CompUnsigned_i5 (
     .a( Opcode ),
     .b( 6'b10 ),
-    .\= ( s7 )
+    .\= ( s6 )
   );
   PriorityEncoder3 PriorityEncoder3_i6 (
     .in0( s0 ),
     .in1( s1 ),
     .in2( s2 ),
     .in3( s5 ),
-    .in4( s6 ),
-    .in5( s7 ),
+    .in4( bne1 ),
+    .in5( s6 ),
     .in6( 1'b0 ),
     .in7( 1'b0 ),
     .num( s3 )
   );
   Mux_8x1_NBits #(
-    .Bits(11)
+    .Bits(12)
   )
   Mux_8x1_NBits_i7 (
     .sel( s3 ),
-    .in_0( 11'b101111000 ),
-    .in_1( 11'b10010001 ),
-    .in_2( 11'b110010110 ),
-    .in_3( 11'b1000011000 ),
-    .in_4( 11'b1000011000 ),
-    .in_5( 11'b10000010000 ),
-    .in_6( 11'b0 ),
-    .in_7( 11'b0 ),
+    .in_0( 12'b101111000 ),
+    .in_1( 12'b10010001 ),
+    .in_2( 12'b110010110 ),
+    .in_3( 12'b1000011000 ),
+    .in_4( 12'b100000011000 ),
+    .in_5( 12'b10000000000 ),
+    .in_6( 12'b0 ),
+    .in_7( 12'b0 ),
     .out( s4 )
   );
   Mux_2x1_NBits #(
-    .Bits(11)
+    .Bits(12)
   )
   Mux_2x1_NBits_i8 (
     .sel( Reset ),
     .in_0( s4 ),
-    .in_1( 11'b0 ),
-    .out( s8 )
+    .in_1( 12'b0 ),
+    .out( s7 )
   );
-  assign memWrite = s8[0];
-  assign memRead = s8[1];
-  assign memToReg = s8[2];
-  assign aluOp = s8[5:3];
-  assign RegDst = s8[6];
-  assign aluSrc = s8[7];
-  assign RegWrite = s8[8];
-  assign Branch = s8[9];
-  assign J = s8[10];
+  assign memWrite = s7[0];
+  assign memRead = s7[1];
+  assign memToReg = s7[2];
+  assign aluOp = s7[5:3];
+  assign RegDst = s7[6];
+  assign aluSrc = s7[7];
+  assign RegWrite = s7[8];
+  assign branch = s7[9];
+  assign jump = s7[10];
+  assign branch2 = s7[11];
 endmodule
-
-module DIG_Register_BUS #(
-    parameter Bits = 1
+module DIG_RegisterFile
+#(
+    parameter Bits = 8,
+    parameter AddrBits = 4
 )
 (
+    input [(Bits-1):0] Din,
+    input we,
+    input [(AddrBits-1):0] Rw,
     input C,
-    input en,
-    input [(Bits - 1):0]D,
-    output [(Bits - 1):0]Q
+    input [(AddrBits-1):0] Ra,
+    input [(AddrBits-1):0] Rb,
+    output [(Bits-1):0] Da,
+    output [(Bits-1):0] Db
 );
 
-    reg [(Bits - 1):0] state = 'h0;
+    reg [(Bits-1):0] memory[0:((1 << AddrBits)-1)];
 
-    assign Q = state;
+    assign Da = memory[Ra];
+    assign Db = memory[Rb];
 
     always @ (posedge C) begin
-        if (en)
-            state <= D;
-   end
-endmodule
-module DIG_Add
-#(
-    parameter Bits = 1
-)
-(
-    input [(Bits-1):0] a,
-    input [(Bits-1):0] b,
-    input c_i,
-    output [(Bits - 1):0] s,
-    output c_o
-);
-   wire [Bits:0] temp;
-
-   assign temp = a + b + c_i;
-   assign s = temp [(Bits-1):0];
-   assign c_o = temp[Bits];
-endmodule
-
-
-module DIG_ROM_256X32_Inst_Mem (
-    input [7:0] A,
-    input sel,
-    output reg [31:0] D
-);
-    reg [31:0] my_rom [0:2];
-
-    always @ (*) begin
-        if (~sel)
-            D = 32'hz;
-        else if (A > 8'h2)
-            D = 32'h0;
-        else
-            D = my_rom[A];
-    end
-
-    initial begin
-        my_rom[0] = 32'h8c080000;
-        my_rom[1] = 32'h8c090004;
-        my_rom[2] = 32'hac080008;
+        if (we)
+            memory[Rw] <= Din;
     end
 endmodule
-
-module DIG_BitExtender #(
-    parameter inputBits = 2,
-    parameter outputBits = 4
-)
-(
-    input [(inputBits-1):0] in,
-    output [(outputBits - 1):0] out
-);
-    assign out = {{(outputBits - inputBits){in[inputBits - 1]}}, in};
-endmodule
-
-
 
 
 module ALUControl (
@@ -311,10 +264,11 @@ module ALUControl (
   wire s2;
   wire s3;
   wire s4;
-  wire [2:0] s5;
-  wire s6;
-  wire [2:0] s7;
-  wire s8;
+  wire s5;
+  wire [2:0] s6;
+  wire s7;
+  wire [2:0] s8;
+  wire s9;
   // ADD
   CompUnsigned #(
     .Bits(6)
@@ -366,66 +320,231 @@ module ALUControl (
   CompUnsigned_i5 (
     .a( aluOp ),
     .b( 3'b111 ),
-    .\= ( s8 )
+    .\= ( s9 )
   );
-  PriorityEncoder3 PriorityEncoder3_i6 (
+  // Xor
+  CompUnsigned #(
+    .Bits(6)
+  )
+  CompUnsigned_i6 (
+    .a( Func ),
+    .b( 6'b100110 ),
+    .\= ( s5 )
+  );
+  // Xor
+  CompUnsigned #(
+    .Bits(6)
+  )
+  CompUnsigned_i7 (
+    .a( Func ),
+    .b( 6'b100110 )
+  );
+  PriorityEncoder3 PriorityEncoder3_i8 (
     .in0( s1 ),
     .in1( s2 ),
     .in2( s0 ),
     .in3( s3 ),
     .in4( s4 ),
-    .in5( 1'b0 ),
+    .in5( s5 ),
     .in6( 1'b0 ),
     .in7( 1'b0 ),
-    .num( s5 ),
-    .any( s6 )
+    .num( s6 ),
+    .any( s7 )
   );
   Mux_2x1_NBits #(
     .Bits(3)
   )
-  Mux_2x1_NBits_i7 (
-    .sel( s6 ),
-    .in_0( 3'b101 ),
-    .in_1( s5 ),
-    .out( s7 )
+  Mux_2x1_NBits_i9 (
+    .sel( s7 ),
+    .in_0( 3'b110 ),
+    .in_1( s6 ),
+    .out( s8 )
   );
   Mux_2x1_NBits #(
     .Bits(3)
   )
-  Mux_2x1_NBits_i8 (
-    .sel( s8 ),
+  Mux_2x1_NBits_i10 (
+    .sel( s9 ),
     .in_0( aluOp ),
-    .in_1( s7 ),
+    .in_1( s8 ),
     .out( aluFunc )
   );
 endmodule
-module DIG_RegisterFile
+module DIG_RAMDualPort
 #(
     parameter Bits = 8,
     parameter AddrBits = 4
 )
 (
-    input [(Bits-1):0] Din,
-    input we,
-    input [(AddrBits-1):0] Rw,
-    input C,
-    input [(AddrBits-1):0] Ra,
-    input [(AddrBits-1):0] Rb,
-    output [(Bits-1):0] Da,
-    output [(Bits-1):0] Db
+  input [(AddrBits-1):0] A,
+  input [(Bits-1):0] Din,
+  input str,
+  input C,
+  input ld,
+  output [(Bits-1):0] D
 );
+  reg [(Bits-1):0] memory[0:((1 << AddrBits) - 1)];
 
-    reg [(Bits-1):0] memory[0:((1 << AddrBits)-1)];
+  assign D = ld? memory[A] : 'hz;
 
-    assign Da = memory[Ra];
-    assign Db = memory[Rb];
+  always @ (posedge C) begin
+    if (str)
+      memory[A] <= Din;
+  end
+endmodule
 
-    always @ (posedge C) begin
-        if (we)
-            memory[Rw] <= Din;
+
+module Mux_2x1
+(
+    input [0:0] sel,
+    input in_0,
+    input in_1,
+    output reg out
+);
+    always @ (*) begin
+        case (sel)
+            1'h0: out = in_0;
+            1'h1: out = in_1;
+            default:
+                out = 'h0;
+        endcase
     end
 endmodule
 
+module DIG_Add
+#(
+    parameter Bits = 1
+)
+(
+    input [(Bits-1):0] a,
+    input [(Bits-1):0] b,
+    input c_i,
+    output [(Bits - 1):0] s,
+    output c_o
+);
+   wire [Bits:0] temp;
+
+   assign temp = a + b + c_i;
+   assign s = temp [(Bits-1):0];
+   assign c_o = temp[Bits];
+endmodule
+
+
+
+module DataMemory (
+  input [31:0] virtualPC,
+  input en,
+  output invalidMemory,
+  output [10:0] Physicaladdress
+);
+  wire [31:0] s0;
+  wire s1;
+  wire s2;
+  wire control;
+  wire [31:0] s3;
+  wire [31:0] s4;
+  wire s5;
+  wire s6;
+  wire adder;
+  wire [31:0] s7;
+  CompUnsigned #(
+    .Bits(32)
+  )
+  CompUnsigned_i0 (
+    .a( virtualPC ),
+    .b( 32'b10000000000000000001111111111 ),
+    .\> ( s1 )
+  );
+  CompUnsigned #(
+    .Bits(32)
+  )
+  CompUnsigned_i1 (
+    .a( virtualPC ),
+    .b( 32'b10000000000000000000000000000 ),
+    .\< ( s2 )
+  );
+  CompUnsigned #(
+    .Bits(32)
+  )
+  CompUnsigned_i2 (
+    .a( virtualPC ),
+    .b( 32'b1111111111111111110111111111011 ),
+    .\> ( s5 )
+  );
+  CompUnsigned #(
+    .Bits(32)
+  )
+  CompUnsigned_i3 (
+    .a( virtualPC ),
+    .b( 32'b1111111111111111110101111111100 ),
+    .\< ( s6 )
+  );
+  assign adder = (s6 | s5);
+  assign control = (adder & (s2 | s1));
+  Mux_2x1_NBits #(
+    .Bits(32)
+  )
+  Mux_2x1_NBits_i4 (
+    .sel( control ),
+    .in_0( virtualPC ),
+    .in_1( 32'b0 ),
+    .out( s3 )
+  );
+  Mux_2x1 Mux_2x1_i5 (
+    .sel( en ),
+    .in_0( 1'b0 ),
+    .in_1( control ),
+    .out( invalidMemory )
+  );
+  Mux_2x1_NBits #(
+    .Bits(32)
+  )
+  Mux_2x1_NBits_i6 (
+    .sel( en ),
+    .in_0( 32'b0 ),
+    .in_1( s3 ),
+    .out( s4 )
+  );
+  DIG_Add #(
+    .Bits(32)
+  )
+  DIG_Add_i7 (
+    .a( s4 ),
+    .b( 32'b100 ),
+    .c_i( 1'b0 ),
+    .s( s7 )
+  );
+  Mux_2x1_NBits #(
+    .Bits(32)
+  )
+  Mux_2x1_NBits_i8 (
+    .sel( adder ),
+    .in_0( s7 ),
+    .in_1( s4 ),
+    .out( s0 )
+  );
+  assign Physicaladdress = s0[10:0];
+endmodule
+
+module DIG_Register_BUS #(
+    parameter Bits = 1
+)
+(
+    input C,
+    input en,
+    input [(Bits - 1):0]D,
+    output [(Bits - 1):0]Q
+);
+
+    reg [(Bits - 1):0] state = 'h0;
+
+    assign Q = state;
+
+    always @ (posedge C) begin
+        if (en)
+            state <= D;
+   end
+endmodule
 
 module DIG_Sub #(
     parameter Bits = 2
@@ -473,8 +592,9 @@ module ALU (
   wire [31:0] s2;
   wire [31:0] s3;
   wire [31:0] s4;
+  wire [31:0] s5;
   wire [31:0] res_temp;
-  wire s5;
+  wire s6;
   DIG_Add #(
     .Bits(32)
   )
@@ -501,9 +621,10 @@ module ALU (
   CompSigned_i2 (
     .a( a ),
     .b( b ),
-    .\< ( s5 )
+    .\< ( s6 )
   );
-  assign s4[0] = s5;
+  assign s5 = (a ^ b);
+  assign s4[0] = s6;
   assign s4[31:1] = 31'b0;
   Mux_8x1_NBits #(
     .Bits(32)
@@ -515,7 +636,7 @@ module ALU (
     .in_2( s0 ),
     .in_3( s1 ),
     .in_4( s4 ),
-    .in_5( 32'b0 ),
+    .in_5( s5 ),
     .in_6( 32'b0 ),
     .in_7( 32'b0 ),
     .out( res_temp )
@@ -530,53 +651,164 @@ module ALU (
   );
   assign res = res_temp;
 endmodule
-module DIG_RAMDualPort
-#(
-    parameter Bits = 8,
-    parameter AddrBits = 4
+
+module DirVirtual (
+  input [31:0] virtualPC,
+  output invalidMemory,
+  output [9:0] Physicaladdress
+);
+  wire [31:0] s0;
+  wire invalidMemory_temp;
+  wire s1;
+  wire s2;
+  CompUnsigned #(
+    .Bits(32)
+  )
+  CompUnsigned_i0 (
+    .a( virtualPC ),
+    .b( 32'b10000000000001111111111 ),
+    .\> ( s1 )
+  );
+  CompUnsigned #(
+    .Bits(32)
+  )
+  CompUnsigned_i1 (
+    .a( virtualPC ),
+    .b( 32'b10000000000000000000000 ),
+    .\< ( s2 )
+  );
+  assign invalidMemory_temp = (s2 | s1);
+  Mux_2x1_NBits #(
+    .Bits(32)
+  )
+  Mux_2x1_NBits_i2 (
+    .sel( invalidMemory_temp ),
+    .in_0( virtualPC ),
+    .in_1( 32'b0 ),
+    .out( s0 )
+  );
+  assign Physicaladdress = s0[9:0];
+  assign invalidMemory = invalidMemory_temp;
+endmodule
+module DIG_ROM_256X32_InstMem (
+    input [7:0] A,
+    input sel,
+    output reg [31:0] D
+);
+    reg [31:0] my_rom [0:8];
+
+    always @ (*) begin
+        if (~sel)
+            D = 32'hz;
+        else if (A > 8'h8)
+            D = 32'h0;
+        else
+            D = my_rom[A];
+    end
+
+    initial begin
+        my_rom[0] = 32'h10a7fffb;
+        my_rom[1] = 32'h8000001;
+        my_rom[2] = 32'hac080008;
+        my_rom[3] = 32'h0;
+        my_rom[4] = 32'h0;
+        my_rom[5] = 32'h0;
+        my_rom[6] = 32'h0;
+        my_rom[7] = 32'h0;
+        my_rom[8] = 32'h8000001;
+    end
+endmodule
+
+module DIG_BitExtender #(
+    parameter inputBits = 2,
+    parameter outputBits = 4
 )
 (
-  input [(AddrBits-1):0] A,
-  input [(Bits-1):0] Din,
-  input str,
-  input C,
-  input ld,
-  output [(Bits-1):0] D
+    input [(inputBits-1):0] in,
+    output [(outputBits - 1):0] out
 );
-  reg [(Bits-1):0] memory[0:((1 << AddrBits) - 1)];
-
-  assign D = ld? memory[A] : 'hz;
-
-  always @ (posedge C) begin
-    if (str)
-      memory[A] <= Din;
-  end
+    assign out = {{(outputBits - inputBits){in[inputBits - 1]}}, in};
 endmodule
 
 
+
+
+module jtarget (
+  input [25:0] jumpadress,
+  input [31:0] \pc+4 ,
+  output [31:0] out
+);
+  assign out[1:0] = 2'b0;
+  assign out[27:2] = jumpadress;
+  assign out[31:28] = \pc+4 [31:28];
+endmodule
+
+module ShiftLeft2 (
+  input [31:0] i,
+  output [31:0] o
+);
+  assign o[0] = 1'b0;
+  assign o[1] = 1'b0;
+  assign o[2] = i[0];
+  assign o[3] = i[1];
+  assign o[4] = i[2];
+  assign o[5] = i[3];
+  assign o[6] = i[4];
+  assign o[7] = i[5];
+  assign o[8] = i[6];
+  assign o[9] = i[7];
+  assign o[10] = i[8];
+  assign o[11] = i[9];
+  assign o[12] = i[10];
+  assign o[13] = i[11];
+  assign o[14] = i[12];
+  assign o[15] = i[13];
+  assign o[16] = i[14];
+  assign o[17] = i[15];
+  assign o[18] = i[16];
+  assign o[19] = i[17];
+  assign o[20] = i[18];
+  assign o[21] = i[19];
+  assign o[22] = i[20];
+  assign o[23] = i[21];
+  assign o[24] = i[22];
+  assign o[25] = i[23];
+  assign o[26] = i[24];
+  assign o[27] = i[25];
+  assign o[28] = i[26];
+  assign o[29] = i[27];
+  assign o[30] = i[28];
+  assign o[31] = i[29];
+endmodule
+
 module MIPS32SOC (
   input clk,
-  input Reset
+  input rst,
+  output invalid_opcode,
+  output invalid_addr,
+  output invalid_pc
 );
   wire [31:0] s0;
   wire [31:0] s1;
   wire [7:0] s2;
   wire [31:0] s3;
-  wire [31:0] s4;
-  wire [9:0] s5;
-  wire [31:0] s6;
+  wire [31:0] pcplus4;
+  wire [9:0] s4;
+  wire [31:0] s5;
   wire RegWrite;
+  wire [4:0] s6;
   wire [4:0] s7;
   wire [4:0] s8;
-  wire [4:0] s9;
+  wire [31:0] s9;
   wire [31:0] s10;
-  wire [31:0] s11;
   wire [5:0] Func;
-  wire [4:0] s12;
+  wire [4:0] s11;
   wire [5:0] Opcode;
+  wire [31:0] s12;
   wire [31:0] s13;
   wire [2:0] aluFunc;
   wire [31:0] s14;
+  wire isZero;
   wire [15:0] s15;
   wire [31:0] s16;
   wire aluSrc;
@@ -585,22 +817,32 @@ module MIPS32SOC (
   wire memToReg;
   wire memRead;
   wire memWrite;
-  wire Brancj;
-  wire j;
-  wire [7:0] s17;
+  wire branch;
+  wire jump;
+  wire branch2;
+  wire [8:0] s17;
   wire [31:0] s18;
+  wire [10:0] s19;
+  wire jorbr;
+  wire [31:0] offsetgeneral;
+  wire [31:0] offset;
+  wire [31:0] beqoffset;
+  wire [25:0] s20;
+  wire [31:0] jumpoffset;
+  wire readorwrite;
+  assign invalid_opcode = 1'b0;
   Mux_2x1_NBits #(
     .Bits(32)
   )
   Mux_2x1_NBits_i0 (
-    .sel( Reset ),
-    .in_0( s4 ),
-    .in_1( 32'b0 ),
-    .out( s0 )
+    .sel( rst ),
+    .in_0( pcplus4 ),
+    .in_1( 32'b10000000000000000000000 ),
+    .out( s12 )
   );
   ControlUnit ControlUnit_i1 (
     .Opcode( Opcode ),
-    .Reset( Reset ),
+    .Reset( rst ),
     .aluSrc( aluSrc ),
     .RegDst( RegDst ),
     .aluOp( aluOp ),
@@ -608,102 +850,57 @@ module MIPS32SOC (
     .memRead( memRead ),
     .memWrite( memWrite ),
     .RegWrite( RegWrite ),
-    .Branch( Brancj ),
-    .J( j )
+    .branch( branch ),
+    .jump( jump ),
+    .branch2( branch2 )
   );
-  // PC
-  DIG_Register_BUS #(
-    .Bits(32)
-  )
-  DIG_Register_BUS_i2 (
-    .D( s0 ),
-    .C( clk ),
-    .en( 1'b1 ),
-    .Q( s1 )
-  );
-  DIG_Add #(
-    .Bits(32)
-  )
-  DIG_Add_i3 (
-    .a( s1 ),
-    .b( 32'b100 ),
-    .c_i( 1'b0 ),
-    .s( s4 )
-  );
-  assign s5 = s1[9:0];
-  assign s2 = s5[9:2];
-  // Inst_Mem
-  DIG_ROM_256X32_Inst_Mem DIG_ROM_256X32_Inst_Mem_i4 (
-    .A( s2 ),
-    .sel( 1'b1 ),
-    .D( s3 )
-  );
-  assign Func = s3[5:0];
-  assign s12 = s3[15:11];
-  assign s9 = s3[20:16];
-  assign s8 = s3[25:21];
-  assign Opcode = s3[31:26];
-  assign s15 = s3[15:0];
-  DIG_BitExtender #(
-    .inputBits(16),
-    .outputBits(32)
-  )
-  DIG_BitExtender_i5 (
-    .in( s15 ),
-    .out( s16 )
-  );
-  Mux_2x1_NBits #(
-    .Bits(5)
-  )
-  Mux_2x1_NBits_i6 (
-    .sel( RegDst ),
-    .in_0( s9 ),
-    .in_1( s12 ),
-    .out( s7 )
-  );
-  ALUControl ALUControl_i7 (
-    .aluOp( aluOp ),
-    .Func( Func ),
-    .aluFunc( aluFunc )
-  );
+  assign readorwrite = (memRead | memWrite);
   // Reg File
   DIG_RegisterFile #(
     .Bits(32),
     .AddrBits(5)
   )
-  DIG_RegisterFile_i8 (
-    .Din( s6 ),
+  DIG_RegisterFile_i2 (
+    .Din( s5 ),
     .we( RegWrite ),
-    .Rw( s7 ),
+    .Rw( s6 ),
     .C( clk ),
-    .Ra( s8 ),
-    .Rb( s9 ),
-    .Da( s10 ),
-    .Db( s11 )
-  );
-  ALU ALU_i9 (
-    .a( s10 ),
-    .b( s13 ),
-    .op( aluFunc ),
-    .res( s14 )
+    .Ra( s7 ),
+    .Rb( s8 ),
+    .Da( s9 ),
+    .Db( s10 )
   );
   Mux_2x1_NBits #(
     .Bits(32)
   )
-  Mux_2x1_NBits_i10 (
+  Mux_2x1_NBits_i3 (
     .sel( aluSrc ),
-    .in_0( s11 ),
+    .in_0( s10 ),
     .in_1( s16 ),
     .out( s13 )
+  );
+  Mux_2x1_NBits #(
+    .Bits(5)
+  )
+  Mux_2x1_NBits_i4 (
+    .sel( RegDst ),
+    .in_0( s8 ),
+    .in_1( s11 ),
+    .out( s6 )
+  );
+  ALUControl ALUControl_i5 (
+    .aluOp( aluOp ),
+    .Func( Func ),
+    .aluFunc( aluFunc )
   );
   // Data Mem
   DIG_RAMDualPort #(
     .Bits(32),
-    .AddrBits(8)
+    .AddrBits(9)
   )
-  DIG_RAMDualPort_i11 (
+  DIG_RAMDualPort_i6 (
     .A( s17 ),
-    .Din( s11 ),
+    .Din( s10 ),
     .str( memWrite ),
     .C( clk ),
     .ld( memRead ),
@@ -712,11 +909,107 @@ module MIPS32SOC (
   Mux_2x1_NBits #(
     .Bits(32)
   )
-  Mux_2x1_NBits_i12 (
+  Mux_2x1_NBits_i7 (
     .sel( memToReg ),
     .in_0( s14 ),
     .in_1( s18 ),
-    .out( s6 )
+    .out( s5 )
   );
-  assign s17 = s14[9:2];
+  Mux_2x1_NBits #(
+    .Bits(32)
+  )
+  Mux_2x1_NBits_i8 (
+    .sel( jorbr ),
+    .in_0( s12 ),
+    .in_1( offsetgeneral ),
+    .out( s0 )
+  );
+  Mux_2x1_NBits #(
+    .Bits(32)
+  )
+  Mux_2x1_NBits_i9 (
+    .sel( jump ),
+    .in_0( beqoffset ),
+    .in_1( jumpoffset ),
+    .out( offsetgeneral )
+  );
+  assign jorbr = (jump | ((branch & isZero) | (branch2 & ~ isZero)));
+  DataMemory DataMemory_i10 (
+    .virtualPC( s14 ),
+    .en( readorwrite ),
+    .invalidMemory( invalid_addr ),
+    .Physicaladdress( s19 )
+  );
+  // PC
+  DIG_Register_BUS #(
+    .Bits(32)
+  )
+  DIG_Register_BUS_i11 (
+    .D( s0 ),
+    .C( clk ),
+    .en( 1'b1 ),
+    .Q( s1 )
+  );
+  ALU ALU_i12 (
+    .a( s9 ),
+    .b( s13 ),
+    .op( aluFunc ),
+    .res( s14 ),
+    .isZero( isZero )
+  );
+  assign s17 = s19[10:2];
+  DIG_Add #(
+    .Bits(32)
+  )
+  DIG_Add_i13 (
+    .a( s1 ),
+    .b( 32'b100 ),
+    .c_i( 1'b0 ),
+    .s( pcplus4 )
+  );
+  DirVirtual DirVirtual_i14 (
+    .virtualPC( s1 ),
+    .invalidMemory( invalid_pc ),
+    .Physicaladdress( s4 )
+  );
+  assign s2 = s4[9:2];
+  // InstMem
+  DIG_ROM_256X32_InstMem DIG_ROM_256X32_InstMem_i15 (
+    .A( s2 ),
+    .sel( 1'b1 ),
+    .D( s3 )
+  );
+  assign Func = s3[5:0];
+  assign s11 = s3[15:11];
+  assign s8 = s3[20:16];
+  assign s7 = s3[25:21];
+  assign Opcode = s3[31:26];
+  assign s15 = s3[15:0];
+  assign s20 = s3[25:0];
+  DIG_BitExtender #(
+    .inputBits(16),
+    .outputBits(32)
+  )
+  DIG_BitExtender_i16 (
+    .in( s15 ),
+    .out( s16 )
+  );
+  jtarget jtarget_i17 (
+    .jumpadress( s20 ),
+    .\pc+4 ( pcplus4 ),
+    .out( jumpoffset )
+  );
+  ShiftLeft2 ShiftLeft2_i18 (
+    .i( s16 ),
+    .o( offset )
+  );
+  DIG_Add #(
+    .Bits(32)
+  )
+  DIG_Add_i19 (
+    .a( pcplus4 ),
+    .b( offset ),
+    .c_i( 1'b0 ),
+    .s( beqoffset )
+  );
 endmodule
