@@ -20,7 +20,7 @@
           <int>26</int>
         </entry>
       </elementAttributes>
-      <pos x="180" y="140"/>
+      <pos x="180" y="180"/>
     </visualElement>
     <visualElement>
       <elementName>In</elementName>
@@ -111,6 +111,10 @@
       <p2 x="640" y="180"/>
     </wire>
     <wire>
+      <p1 x="180" y="180"/>
+      <p2 x="240" y="180"/>
+    </wire>
+    <wire>
       <p1 x="440" y="200"/>
       <p2 x="540" y="200"/>
     </wire>
@@ -123,11 +127,7 @@
       <p2 x="540" y="220"/>
     </wire>
     <wire>
-      <p1 x="180" y="140"/>
-      <p2 x="240" y="140"/>
-    </wire>
-    <wire>
-      <p1 x="240" y="140"/>
+      <p1 x="240" y="180"/>
       <p2 x="240" y="220"/>
     </wire>
     <wire>
